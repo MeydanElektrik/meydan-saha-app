@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 
 app = Flask(__name__, template_folder='saha_templates')
 app.secret_key = os.getenv('SECRET_KEY', 'saha_meydan_2025_secret')
+app.config['SESSION_PERMANENT'] = False  # Tarayıcı kapanınca oturum sona ersin
 
 # ========== DB ==========
 def get_db():
@@ -157,7 +158,7 @@ def musteri_ekle_hizli():
         label = sirket or ad
         if telefon:
             label += f' · {telefon}'
-        return jsonify({'success': True, 'id': musteri_id, 'label': label})
+        return jsonify({'success': True, 'id': musteri_id, 'label': label, 'redirect': f'/yeni_servis?musteri_id={musteri_id}'})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
@@ -241,7 +242,9 @@ def yeni_servis():
         musteriler = []
 
     today = datetime.now().strftime('%Y-%m-%d')
-    return render_template('yeni_servis.html', musteriler=musteriler, today=today)
+    # URL'den seçili müşteri (yeni müşteri eklendikten sonra)
+    secili_musteri_id = request.args.get('musteri_id', '')
+    return render_template('yeni_servis.html', musteriler=musteriler, today=today, secili_musteri_id=secili_musteri_id)
 
 @app.route('/servislerim')
 @login_required
