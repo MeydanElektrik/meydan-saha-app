@@ -9,24 +9,64 @@
   <!-- Müşteri -->
   <div class="card">
     <div class="card-title">👤 Müşteri Bilgisi</div>
-    <div class="field">
-      <label>Müşteri *</label>
-      <select name="musteri_id" id="musteriSelect" required>
-        <option value="">Müşteri seçin...</option>
-        {% for m in musteriler %}
-        <option value="{{ m.id }}">
-          {{ m.sirket_adi or (m.ad + ' ' + (m.soyad or '')) }}
-          {% if m.telefon %} · {{ m.telefon }}{% endif %}
-        </option>
-        {% endfor %}
-      </select>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px;">
+      <button type="button" id="btnMevcut" onclick="switchMusteri('mevcut')"
+              style="padding:10px; border-radius:10px; font-size:14px; font-weight:600;
+                     background:#1a6b3a; color:white; border:none; cursor:pointer;">
+        📋 Mevcut
+      </button>
+      <button type="button" id="btnYeni" onclick="switchMusteri('yeni')"
+              style="padding:10px; border-radius:10px; font-size:14px; font-weight:600;
+                     background:#e8e8e8; color:#555; border:none; cursor:pointer;">
+        ➕ Yeni Müşteri
+      </button>
+    </div>
+
+    <div id="mevcut_blok">
+      <div class="field" style="margin:0;">
+        <label>Müşteri *</label>
+        <select name="musteri_id" id="musteriSelect" required>
+          <option value="">Müşteri seçin...</option>
+          {% for m in musteriler %}
+          <option value="{{ m.id }}">
+            {{ m.sirket_adi or (m.ad + ' ' + (m.soyad or '')) }}
+            {% if m.telefon %} · {{ m.telefon }}{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div id="yeni_blok" style="display:none;">
+      <div class="field">
+        <label>Adı Soyadı *</label>
+        <input type="text" id="yeni_ad" placeholder="Ad Soyad">
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div class="field" style="margin:0;">
+          <label>Telefon</label>
+          <input type="tel" id="yeni_telefon" placeholder="05XX XXX XXXX">
+        </div>
+        <div class="field" style="margin:0;">
+          <label>Şirket Adı</label>
+          <input type="text" id="yeni_sirket" placeholder="Opsiyonel">
+        </div>
+      </div>
+      <button type="button" onclick="musteriKaydet()"
+              style="width:100%; padding:12px; background:#e8f5e9; color:#1a6b3a;
+                     border:2px solid #a5d6a7; border-radius:10px; font-size:14px;
+                     font-weight:700; cursor:pointer; margin-top:8px;">
+        💾 Müşteriyi Kaydet ve Seç
+      </button>
+      <div id="musteriSonuc" style="margin-top:8px; font-size:13px;"></div>
+      <input type="hidden" name="musteri_id" id="yeniMusteriId">
     </div>
   </div>
 
   <!-- Tarih & Saat -->
   <div class="card">
     <div class="card-title">📅 Tarih & Saat</div>
-    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
       <div class="field" style="margin:0;">
         <label>Tarih *</label>
         <input type="date" name="servis_tarihi" value="{{ today }}" required>
@@ -49,61 +89,142 @@
   <!-- Malzemeler -->
   <div class="card">
     <div class="card-title">🔩 Kullanılan Malzemeler</div>
-    <div id="malzemeContainer">
-      <!-- Malzeme satırı JS ile eklenir -->
-    </div>
-    <button type="button" class="btn-add-malzeme" onclick="malzemeEkle()">
-      ➕ Malzeme Ekle
-    </button>
+    <div id="malzemeContainer"></div>
+    <button type="button" class="btn-add-malzeme" onclick="malzemeEkle()">➕ Malzeme Ekle</button>
   </div>
 
-  <!-- Butonlar -->
-  <button type="submit" class="btn-primary" style="margin-bottom:10px;">
-    ✅ Servisi Kaydet
-  </button>
-  <a href="{{ url_for('anasayfa') }}" class="btn-secondary">İptal</a>
+  <!-- İşçilik + Özet -->
+  <div class="card">
+    <div class="card-title">🧰 İşçilik & Özet</div>
+    <div class="field" style="margin-bottom:14px;">
+      <label>İşçilik Ücreti (₺)</label>
+      <input type="number" name="iscilik_ucreti" id="iscilikInput"
+             placeholder="0.00" min="0" step="0.01" value="0"
+             oninput="hesapla()" inputmode="decimal"
+             style="font-size:18px; font-weight:700;">
+    </div>
+    <div style="background:#f8f9fa; border-radius:10px; padding:14px;">
+      <div style="display:flex; justify-content:space-between; font-size:14px; padding:4px 0; color:#666;">
+        <span>Malzeme Toplamı</span><span id="malzemeToplam">0,00 ₺</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:14px; padding:4px 0; color:#666;">
+        <span>İşçilik</span><span id="iscilikGoster">0,00 ₺</span>
+      </div>
+      <div style="height:1px; background:#e0e0e0; margin:8px 0;"></div>
+      <div style="display:flex; justify-content:space-between; font-size:17px; font-weight:800; color:#1a6b3a; padding:4px 0;">
+        <span>Toplam</span><span id="servisToplamGoster">0,00 ₺</span>
+      </div>
+    </div>
+  </div>
 
+  <button type="submit" class="btn-primary" style="margin-bottom:10px;">✅ Servisi Kaydet</button>
+  <a href="{{ url_for('anasayfa') }}" class="btn-secondary">İptal</a>
 </form>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+let aktifMod = 'mevcut';
+const BIRIMLER = ['Adet','Metre','m²','Kg','Litre','Takım','Paket','Rulo','Kutu'];
+
+function switchMusteri(mod) {
+  aktifMod = mod;
+  document.getElementById('mevcut_blok').style.display = mod==='mevcut' ? 'block' : 'none';
+  document.getElementById('yeni_blok').style.display = mod==='yeni' ? 'block' : 'none';
+  document.getElementById('btnMevcut').style.cssText = `padding:10px;border-radius:10px;font-size:14px;font-weight:600;background:${mod==='mevcut'?'#1a6b3a':'#e8e8e8'};color:${mod==='mevcut'?'white':'#555'};border:none;cursor:pointer;`;
+  document.getElementById('btnYeni').style.cssText = `padding:10px;border-radius:10px;font-size:14px;font-weight:600;background:${mod==='yeni'?'#1a6b3a':'#e8e8e8'};color:${mod==='yeni'?'white':'#555'};border:none;cursor:pointer;`;
+  document.getElementById('musteriSelect').required = mod === 'mevcut';
+}
+
+function musteriKaydet() {
+  const ad = document.getElementById('yeni_ad').value.trim();
+  if (!ad) { alert('Ad zorunlu!'); return; }
+  fetch('/musteri_ekle_hizli', {
+    method: 'POST',
+    body: new URLSearchParams({
+      yeni_ad: ad,
+      yeni_telefon: document.getElementById('yeni_telefon').value.trim(),
+      yeni_sirket: document.getElementById('yeni_sirket').value.trim()
+    })
+  }).then(r=>r.json()).then(d=>{
+    const el = document.getElementById('musteriSonuc');
+    if (d.success) {
+      document.getElementById('yeniMusteriId').value = d.id;
+      el.innerHTML = `<span style="color:#1a6b3a;font-weight:700;">✅ ${d.label} eklendi ve seçildi</span>`;
+    } else {
+      el.innerHTML = `<span style="color:#dc3545;">❌ ${d.message}</span>`;
+    }
+  });
+}
+
 function malzemeEkle() {
   const container = document.getElementById('malzemeContainer');
   const div = document.createElement('div');
   div.className = 'malzeme-row';
   div.innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-      <span style="font-size:13px; font-weight:600; color:#555;">Malzeme Adı *</span>
-      <button type="button" class="btn-remove" onclick="this.closest('.malzeme-row').remove()">✕</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span style="font-size:13px;font-weight:600;color:#555;">Malzeme Adı *</span>
+      <button type="button" class="btn-remove" onclick="this.closest('.malzeme-row').remove();hesapla();">✕</button>
     </div>
     <input type="text" name="malzeme_ad[]" placeholder="Ör: NYA Kablo 2.5mm²"
-           style="width:100%; padding:11px; border:1.5px solid #ddd; border-radius:8px; font-size:15px;">
-    <div class="row2">
-      <input type="number" name="malzeme_miktar[]" placeholder="Miktar" value="1" min="0" step="0.01">
-      <select name="malzeme_birim[]">
-        <option value="adet">Adet</option>
-        <option value="metre">Metre</option>
-        <option value="m²">m²</option>
-        <option value="kg">Kg</option>
-        <option value="litre">Litre</option>
-        <option value="takım">Takım</option>
-        <option value="paket">Paket</option>
-        <option value="rulo">Rulo</option>
-        <option value="kutu">Kutu</option>
-      </select>
-      <div></div><div></div>
+           style="width:100%;padding:11px;border:1.5px solid #ddd;border-radius:8px;font-size:15px;margin-bottom:8px;">
+    <div style="display:grid;grid-template-columns:1fr 1.4fr 1.6fr;gap:8px;">
+      <div>
+        <div style="font-size:11px;color:#888;margin-bottom:4px;font-weight:600;">Miktar</div>
+        <input type="number" name="malzeme_miktar[]" value="1" min="0" step="0.01"
+               inputmode="decimal"
+               style="width:100%;padding:10px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;text-align:center;"
+               oninput="hesapla()">
+      </div>
+      <div>
+        <div style="font-size:11px;color:#888;margin-bottom:4px;font-weight:600;">Birim</div>
+        <select name="malzeme_birim[]"
+                style="width:100%;padding:10px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;-webkit-appearance:none;background:white;">
+          ${BIRIMLER.map(b=>`<option>${b}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <div style="font-size:11px;color:#888;margin-bottom:4px;font-weight:600;">Birim Fiyatı (₺)</div>
+        <input type="number" name="malzeme_birim_fiyat[]" placeholder="0,00" min="0" step="0.01"
+               inputmode="decimal"
+               style="width:100%;padding:10px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;text-align:right;"
+               oninput="hesapla()">
+      </div>
     </div>`;
   container.appendChild(div);
   div.querySelector('input[type=text]').focus();
+  hesapla();
 }
 
-// Sayfa açılışında 1 satır ekle
-document.addEventListener('DOMContentLoaded', malzemeEkle);
+function fmt(n) {
+  return n.toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ₺';
+}
+
+function hesapla() {
+  let malToplam = 0;
+  document.querySelectorAll('.malzeme-row').forEach(row => {
+    const m = parseFloat(row.querySelector('[name="malzeme_miktar[]"]')?.value) || 0;
+    const f = parseFloat(row.querySelector('[name="malzeme_birim_fiyat[]"]')?.value) || 0;
+    malToplam += m * f;
+  });
+  const isc = parseFloat(document.getElementById('iscilikInput').value) || 0;
+  document.getElementById('malzemeToplam').textContent = fmt(malToplam);
+  document.getElementById('iscilikGoster').textContent = fmt(isc);
+  document.getElementById('servisToplamGoster').textContent = fmt(malToplam + isc);
+}
 
 document.getElementById('servisForm').addEventListener('submit', function(e) {
-  const musteri = document.getElementById('musteriSelect').value;
-  if (!musteri) { e.preventDefault(); alert('Lütfen müşteri seçin!'); }
+  if (aktifMod === 'mevcut') {
+    if (!document.getElementById('musteriSelect').value) {
+      e.preventDefault(); alert('Lütfen müşteri seçin!'); return;
+    }
+  } else {
+    if (!document.getElementById('yeniMusteriId').value) {
+      e.preventDefault(); alert('Lütfen önce "Müşteriyi Kaydet ve Seç" butonuna basın!'); return;
+    }
+  }
 });
+
+document.addEventListener('DOMContentLoaded', malzemeEkle);
 </script>
 {% endblock %}
