@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Servislerim{% endblock %}
+{% block header_title %}Servislerim{% endblock %}
+{% block header_sub %}Tüm servis kayıtlarım{% endblock %}
+
+{% block content %}
+{% if servisler %}
+{% for s in servisler %}
+<div class="card" style="padding: 14px;">
+
+  <!-- Üst satır: müşteri + durum -->
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+    <div>
+      <div style="font-size:16px; font-weight:700; color:#222;">
+        {{ s.sirket_adi or ((s.musteri_ad or 'Bilinmeyen') + ' ' + (s.musteri_soyad or '')) }}
+      </div>
+      <div style="font-size:12px; color:#888; margin-top:2px;">
+        {{ s.servis_tarihi.strftime('%d.%m.%Y') if s.servis_tarihi else '-' }}
+        {% if s.servis_saati %}· {{ s.servis_saati }}{% endif %}
+      </div>
+    </div>
+    <span class="badge badge-{{ s.servis_durumu }}">
+      {% if s.servis_durumu == 'beklemede' %}⏳ Bekliyor
+      {% elif s.servis_durumu == 'devam_ediyor' %}🔄 Devam
+      {% elif s.servis_durumu == 'tamamlandi' %}✅ Tamam
+      {% else %}{{ s.servis_durumu }}{% endif %}
+    </span>
+  </div>
+
+  <!-- Açıklama -->
+  {% if s.is_aciklamasi %}
+  <div style="font-size:14px; color:#555; background:#f8f9fa; border-radius:8px; padding:10px; margin-bottom:10px;">
+    {{ s.is_aciklamasi[:120] }}{% if s.is_aciklamasi|length > 120 %}…{% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Telefon -->
+  {% if s.musteri_tel %}
+  <a href="tel:{{ s.musteri_tel }}"
+     style="display:inline-flex; align-items:center; gap:6px; font-size:13px; color:#1a6b3a; text-decoration:none; font-weight:600; padding:6px 0; margin-bottom:8px;">
+    📞 {{ s.musteri_tel }}
+  </a>
+  {% endif %}
+
+  <!-- Düzeltme Talebi -->
+  <div>
+    <button class="btn-sm btn-orange" style="font-size:13px;" onclick="talepAc({{ s.id }}, this)">
+      ✏️ Düzeltme Talebi
+    </button>
+  </div>
+
+  <!-- Talep Formu (gizli) -->
+  <div id="talep_{{ s.id }}" style="display:none; margin-top:10px;">
+    <textarea id="talep_text_{{ s.id }}" rows="3"
+              style="width:100%; padding:11px; border:2px solid #ffe082; border-radius:8px; font-size:14px; resize:none;"
+              placeholder="Düzeltilmesi gereken bilgiyi yazın..."></textarea>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
+      <button class="btn-primary" style="padding:12px; font-size:14px;"
+              onclick="talepGonder({{ s.id }})">Gönder</button>
+      <button class="btn-secondary" style="padding:12px; font-size:14px;"
+              onclick="talepKapat({{ s.id }})">İptal</button>
+    </div>
+  </div>
+
+</div>
+{% endfor %}
+
+{% else %}
+<div class="card" style="text-align:center; padding:40px 20px; color:#aaa;">
+  <div style="font-size:48px; margin-bottom:12px;">📋</div>
+  <div style="font-size:16px; font-weight:600; margin-bottom:6px;">Henüz servis yok</div>
+  <div style="font-size:14px;">İlk servis kaydını oluşturmak için Yeni Servis butonuna bas</div>
+  <a href="{{ url_for('yeni_servis') }}" class="btn-primary" style="margin-top:20px; display:inline-block; padding:13px 30px;">
+    🔧 Yeni Servis
+  </a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function talepAc(id, btn) {
+  const box = document.getElementById('talep_' + id);
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+  if (box.style.display === 'block') {
+    document.getElementById('talep_text_' + id).focus();
+  }
+}
+function talepKapat(id) {
+  document.getElementById('talep_' + id).style.display = 'none';
+}
+function talepGonder(id) {
+  const text = document.getElementById('talep_text_' + id).value.trim();
+  if (!text) { alert('Lütfen açıklama yazın!'); return; }
+
+  fetch('/duzeltme_talebi/' + id, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: 'talep_aciklama=' + encodeURIComponent(text)
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (d.success) {
+      talepKapat(id);
+      document.getElementById('talep_text_' + id).value = '';
+      // Başarı mesajı
+      const msg = document.createElement('div');
+      msg.className = 'flash flash-success';
+      msg.textContent = d.message;
+      msg.style.position = 'fixed';
+      msg.style.top = '70px';
+      msg.style.left = '16px';
+      msg.style.right = '16px';
+      msg.style.zIndex = '999';
+      document.body.appendChild(msg);
+      setTimeout(() => msg.remove(), 3000);
+    } else {
+      alert('Hata: ' + d.message);
+    }
+  });
+}
+</script>
+{% endblock %}

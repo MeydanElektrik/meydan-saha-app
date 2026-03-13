@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Ana Sayfa{% endblock %}
+{% block header_title %}Ana Sayfa{% endblock %}
+{% block header_sub %}{{ session.get('personel_ad') }}{% endblock %}
+
+{% block content %}
+<!-- İstatistikler -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="num">{{ bugun }}</div>
+    <div class="lbl">Bugünkü Servis</div>
+  </div>
+  <div class="stat-card">
+    <div class="num">{{ toplam }}</div>
+    <div class="lbl">Toplam Servis</div>
+  </div>
+</div>
+
+{% if taslak_teklif > 0 %}
+<div class="card" style="background: linear-gradient(135deg, #fff8e1, #fffde7); border: 1.5px solid #ffe082;">
+  <div style="display:flex; align-items:center; justify-content:space-between;">
+    <div>
+      <div style="font-weight:700; color:#e65100;">📄 {{ taslak_teklif }} Taslak Teklif</div>
+      <div style="font-size:12px; color:#888; margin-top:2px;">Onay bekliyor</div>
+    </div>
+    <a href="{{ url_for('tekliflerim') }}" class="btn-sm btn-orange">Görüntüle</a>
+  </div>
+</div>
+{% endif %}
+
+<!-- Hızlı İşlemler -->
+<div class="card">
+  <div class="card-title">⚡ Hızlı İşlem</div>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+    <a href="{{ url_for('yeni_servis') }}" class="btn-primary" style="padding: 18px 10px; font-size:15px;">
+      🔧 Yeni Servis
+    </a>
+    <a href="{{ url_for('yeni_teklif') }}" class="btn-primary" style="padding: 18px 10px; font-size:15px; background: linear-gradient(135deg, #e65100, #ff7043);">
+      📄 Yeni Teklif
+    </a>
+    <a href="{{ url_for('servislerim') }}" class="btn-secondary" style="font-size:14px;">
+      📋 Servislerim
+    </a>
+    <a href="{{ url_for('musteri_ara') }}" class="btn-secondary" style="font-size:14px;">
+      🔍 Müşteri Ara
+    </a>
+  </div>
+</div>
+
+<!-- Son Servisler -->
+{% if son_servisler %}
+<div class="card-title" style="padding: 0 4px; margin-top: 4px;">📋 Son Servisler</div>
+{% for s in son_servisler %}
+<div class="list-item">
+  <span class="icon">🔧</span>
+  <div class="info">
+    <div class="name">
+      {{ s.sirket_adi or ((s.musteri_ad or '') + ' ') }}
+    </div>
+    <div class="meta">
+      {{ s.servis_tarihi.strftime('%d.%m.%Y') if s.servis_tarihi else '-' }}
+      &nbsp;·&nbsp;
+      <span class="badge badge-{{ s.servis_durumu }}">{{ s.servis_durumu | capitalize }}</span>
+    </div>
+    {% if s.is_aciklamasi %}
+    <div class="meta" style="margin-top:3px; color:#555;">{{ s.is_aciklamasi[:60] }}{% if s.is_aciklamasi|length > 60 %}…{% endif %}</div>
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="card" style="text-align:center; color:#aaa; padding:30px;">
+  <div style="font-size:40px; margin-bottom:8px;">📋</div>
+  Henüz servis kaydı yok
+</div>
+{% endif %}
+
+<div style="text-align:center; margin-top:16px;">
+  <a href="{{ url_for('cikis') }}" style="color:#aaa; font-size:13px; text-decoration:none;">⬅ Çıkış Yap</a>
+</div>
+{% endblock %}

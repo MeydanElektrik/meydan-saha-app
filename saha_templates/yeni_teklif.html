@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}Yeni Teklif{% endblock %}
+{% block header_title %}Yeni Teklif{% endblock %}
+{% block header_sub %}Manuel kalem girişi{% endblock %}
+
+{% block content %}
+<form method="POST" id="teklifForm">
+
+  <!-- Temel Bilgiler -->
+  <div class="card">
+    <div class="card-title">📄 Teklif Bilgileri</div>
+
+    <div class="field">
+      <label>Müşteri *</label>
+      <select name="musteri_id" required>
+        <option value="">Müşteri seçin...</option>
+        {% for m in musteriler %}
+        <option value="{{ m.id }}">
+          {{ m.sirket_adi or (m.ad + ' ' + (m.soyad or '')) }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Teklif Konusu *</label>
+      <input type="text" name="konu" placeholder="Ör: Elektrik Tesisatı Kurulumu" required>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+      <div class="field" style="margin:0;">
+        <label>Tarih *</label>
+        <input type="date" name="teklif_tarihi" value="{{ today }}" required>
+      </div>
+      <div class="field" style="margin:0;">
+        <label>KDV Oranı</label>
+        <select name="kdv_orani" id="kdvOrani" onchange="hesapla()">
+          <option value="0">%0</option>
+          <option value="1">%1</option>
+          <option value="8">%8</option>
+          <option value="18" selected>%18</option>
+          <option value="20">%20</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Kalemler -->
+  <div class="card">
+    <div class="card-title">📦 Teklif Kalemleri</div>
+    <div id="kalemContainer"></div>
+    <button type="button" class="btn-add-kalem" onclick="kalemEkle()">➕ Kalem Ekle</button>
+  </div>
+
+  <!-- Toplam Özet -->
+  <div class="toplam-ozet">
+    <div class="toplam-row">
+      <span class="toplam-label">Ara Toplam</span>
+      <span id="araToplam">0,00 ₺</span>
+    </div>
+    <div class="toplam-row">
+      <span class="toplam-label">KDV (<span id="kdvYuzde">18</span>%)</span>
+      <span id="kdvTutar">0,00 ₺</span>
+    </div>
+    <div class="toplam-row big">
+      <span>GENEL TOPLAM</span>
+      <span id="genelToplam">0,00 ₺</span>
+    </div>
+  </div>
+
+  <!-- Notlar -->
+  <div class="card" style="margin-top:12px;">
+    <div class="card-title">📝 Notlar</div>
+    <div class="field" style="margin:0;">
+      <textarea name="notlar" placeholder="Müşteriye iletilecek notlar..." rows="3"></textarea>
+    </div>
+  </div>
+
+  <!-- Kaydet -->
+  <button type="submit" class="btn-primary" style="margin-top:4px; margin-bottom:10px;">
+    💾 Teklifi Kaydet
+  </button>
+  <a href="{{ url_for('anasayfa') }}" class="btn-secondary">İptal</a>
+
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let kalemSayisi = 0;
+
+function kalemEkle() {
+  const container = document.getElementById('kalemContainer');
+  const id = ++kalemSayisi;
+  const div = document.createElement('div');
+  div.className = 'kalem-row';
+  div.id = 'kalem_' + id;
+  div.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+      <span style="font-size:13px; font-weight:600; color:#555;">Kalem ${id}</span>
+      <button type="button" class="btn-remove" onclick="kalemSil('kalem_${id}')">✕</button>
+    </div>
+    <input type="text" name="kalem_aciklama[]" placeholder="Malzeme / Hizmet açıklaması" required
+           style="width:100%; padding:11px; border:1.5px solid #ddd; border-radius:8px; font-size:15px; margin-bottom:8px;"
+           oninput="hesapla()">
+    <div class="row2">
+      <input type="number" name="kalem_miktar[]" placeholder="Miktar" value="1" min="0" step="0.01"
+             style="text-align:center;" oninput="hesapla()">
+      <select name="kalem_birim[]" onchange="hesapla()">
+        <option value="adet">Adet</option>
+        <option value="metre">Metre</option>
+        <option value="m²">m²</option>
+        <option value="kg">Kg</option>
+        <option value="litre">Litre</option>
+        <option value="takım">Takım</option>
+        <option value="paket">Paket</option>
+        <option value="rulo">Rulo</option>
+        <option value="kutu">Kutu</option>
+      </select>
+      <input type="number" name="kalem_fiyat[]" placeholder="Birim ₺" min="0" step="0.01"
+             style="text-align:right;" oninput="hesapla()">
+      <div class="kalem-toplam" id="top_${id}">0,00 ₺</div>
+    </div>`;
+  container.appendChild(div);
+  div.querySelector('input[type=text]').focus();
+  hesapla();
+}
+
+function kalemSil(id) {
+  const el = document.getElementById(id);
+  if (el) { el.remove(); hesapla(); }
+}
+
+function fmt(n) {
+  return n.toLocaleString('tr-TR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' ₺';
+}
+
+function hesapla() {
+  const rows = document.querySelectorAll('.kalem-row');
+  let araToplam = 0;
+
+  rows.forEach(row => {
+    const miktarEl = row.querySelector('input[name="kalem_miktar[]"]');
+    const fiyatEl = row.querySelector('input[name="kalem_fiyat[]"]');
+    const topEl = row.querySelector('.kalem-toplam');
+    if (!miktarEl || !fiyatEl) return;
+    const miktar = parseFloat(miktarEl.value) || 0;
+    const fiyat = parseFloat(fiyatEl.value) || 0;
+    const top = miktar * fiyat;
+    if (topEl) topEl.textContent = fmt(top);
+    araToplam += top;
+  });
+
+  const kdv = parseInt(document.getElementById('kdvOrani').value) || 0;
+  const kdvTutar = araToplam * kdv / 100;
+  const genel = araToplam + kdvTutar;
+
+  document.getElementById('araToplam').textContent = fmt(araToplam);
+  document.getElementById('kdvYuzde').textContent = kdv;
+  document.getElementById('kdvTutar').textContent = fmt(kdvTutar);
+  document.getElementById('genelToplam').textContent = fmt(genel);
+}
+
+document.getElementById('teklifForm').addEventListener('submit', function(e) {
+  const aciklamalar = document.querySelectorAll('input[name="kalem_aciklama[]"]');
+  if (aciklamalar.length === 0) {
+    e.preventDefault();
+    alert('En az bir kalem eklemelisiniz!');
+  }
+});
+
+// Açılışta 1 kalem ekle
+document.addEventListener('DOMContentLoaded', kalemEkle);
+</script>
+{% endblock %}

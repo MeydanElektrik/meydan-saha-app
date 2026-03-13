@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Yeni Servis{% endblock %}
+{% block header_title %}Yeni Servis{% endblock %}
+{% block header_sub %}Saha kaydı oluştur{% endblock %}
+
+{% block content %}
+<form method="POST" id="servisForm">
+
+  <!-- Müşteri -->
+  <div class="card">
+    <div class="card-title">👤 Müşteri Bilgisi</div>
+    <div class="field">
+      <label>Müşteri *</label>
+      <select name="musteri_id" id="musteriSelect" required>
+        <option value="">Müşteri seçin...</option>
+        {% for m in musteriler %}
+        <option value="{{ m.id }}">
+          {{ m.sirket_adi or (m.ad + ' ' + (m.soyad or '')) }}
+          {% if m.telefon %} · {{ m.telefon }}{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+
+  <!-- Tarih & Saat -->
+  <div class="card">
+    <div class="card-title">📅 Tarih & Saat</div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+      <div class="field" style="margin:0;">
+        <label>Tarih *</label>
+        <input type="date" name="servis_tarihi" value="{{ today }}" required>
+      </div>
+      <div class="field" style="margin:0;">
+        <label>Saat</label>
+        <input type="time" name="servis_saati" value="09:00">
+      </div>
+    </div>
+  </div>
+
+  <!-- İş Açıklaması -->
+  <div class="card">
+    <div class="card-title">📝 İş Açıklaması</div>
+    <div class="field" style="margin:0;">
+      <textarea name="is_aciklamasi" placeholder="Yapılacak işi kısaca açıklayın..." required></textarea>
+    </div>
+  </div>
+
+  <!-- Malzemeler -->
+  <div class="card">
+    <div class="card-title">🔩 Kullanılan Malzemeler</div>
+    <div id="malzemeContainer">
+      <!-- Malzeme satırı JS ile eklenir -->
+    </div>
+    <button type="button" class="btn-add-malzeme" onclick="malzemeEkle()">
+      ➕ Malzeme Ekle
+    </button>
+  </div>
+
+  <!-- Butonlar -->
+  <button type="submit" class="btn-primary" style="margin-bottom:10px;">
+    ✅ Servisi Kaydet
+  </button>
+  <a href="{{ url_for('anasayfa') }}" class="btn-secondary">İptal</a>
+
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function malzemeEkle() {
+  const container = document.getElementById('malzemeContainer');
+  const div = document.createElement('div');
+  div.className = 'malzeme-row';
+  div.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+      <span style="font-size:13px; font-weight:600; color:#555;">Malzeme Adı *</span>
+      <button type="button" class="btn-remove" onclick="this.closest('.malzeme-row').remove()">✕</button>
+    </div>
+    <input type="text" name="malzeme_ad[]" placeholder="Ör: NYA Kablo 2.5mm²"
+           style="width:100%; padding:11px; border:1.5px solid #ddd; border-radius:8px; font-size:15px;">
+    <div class="row2">
+      <input type="number" name="malzeme_miktar[]" placeholder="Miktar" value="1" min="0" step="0.01">
+      <select name="malzeme_birim[]">
+        <option value="adet">Adet</option>
+        <option value="metre">Metre</option>
+        <option value="m²">m²</option>
+        <option value="kg">Kg</option>
+        <option value="litre">Litre</option>
+        <option value="takım">Takım</option>
+        <option value="paket">Paket</option>
+        <option value="rulo">Rulo</option>
+        <option value="kutu">Kutu</option>
+      </select>
+      <div></div><div></div>
+    </div>`;
+  container.appendChild(div);
+  div.querySelector('input[type=text]').focus();
+}
+
+// Sayfa açılışında 1 satır ekle
+document.addEventListener('DOMContentLoaded', malzemeEkle);
+
+document.getElementById('servisForm').addEventListener('submit', function(e) {
+  const musteri = document.getElementById('musteriSelect').value;
+  if (!musteri) { e.preventDefault(); alert('Lütfen müşteri seçin!'); }
+});
+</script>
+{% endblock %}

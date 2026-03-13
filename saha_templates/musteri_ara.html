@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Müşteri Ara{% endblock %}
+{% block header_title %}Müşteri Ara{% endblock %}
+{% block header_sub %}İsim, şirket veya telefon ile ara{% endblock %}
+
+{% block content %}
+<form method="GET" id="aramaForm">
+  <div style="display:flex; gap:10px; margin-bottom:16px;">
+    <input type="text" name="q" value="{{ q }}" placeholder="İsim, şirket, telefon..."
+           style="flex:1; padding:14px 16px; border:2px solid #e8e8e8; border-radius:12px;
+                  font-size:15px; outline:none;"
+           id="aramaInput" autocomplete="off" autocapitalize="none">
+    <button type="submit" class="btn-primary" style="width:auto; padding:14px 20px; border-radius:12px;">
+      🔍
+    </button>
+  </div>
+</form>
+
+{% if q and not musteriler %}
+<div class="card" style="text-align:center; padding:30px; color:#aaa;">
+  <div style="font-size:36px; margin-bottom:8px;">🔍</div>
+  <div>"<strong>{{ q }}</strong>" için sonuç bulunamadı</div>
+</div>
+
+{% elif musteriler %}
+<div style="font-size:13px; color:#888; margin-bottom:10px;">
+  {{ musteriler|length }} sonuç bulundu
+</div>
+
+{% for m in musteriler %}
+<div class="card" style="padding:14px;">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+    <div>
+      <div style="font-size:16px; font-weight:700; color:#222;">
+        {{ m.sirket_adi or (m.ad + ' ' + (m.soyad or '')) }}
+      </div>
+      {% if m.sirket_adi and m.ad %}
+      <div style="font-size:13px; color:#888;">{{ m.ad }} {{ m.soyad or '' }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if m.adres %}
+  <div style="font-size:13px; color:#555; margin-bottom:8px; display:flex; align-items:flex-start; gap:6px;">
+    <span>📍</span>
+    <span>{{ m.adres[:80] }}{% if m.adres|length > 80 %}…{% endif %}</span>
+  </div>
+  {% endif %}
+
+  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+    {% if m.telefon %}
+    <a href="tel:{{ m.telefon }}"
+       style="display:inline-flex; align-items:center; gap:6px;
+              background:#e8f5e9; color:#1a6b3a;
+              padding:9px 14px; border-radius:8px;
+              font-size:14px; font-weight:600; text-decoration:none;">
+      📞 {{ m.telefon }}
+    </a>
+    {% endif %}
+    <a href="{{ url_for('yeni_servis') }}?musteri_id={{ m.id }}"
+       style="display:inline-flex; align-items:center; gap:6px;
+              background:#fff3e0; color:#e65100;
+              padding:9px 14px; border-radius:8px;
+              font-size:14px; font-weight:600; text-decoration:none;">
+      🔧 Servis Ekle
+    </a>
+  </div>
+</div>
+{% endfor %}
+
+{% elif not q %}
+<div class="card" style="text-align:center; padding:40px 20px; color:#aaa;">
+  <div style="font-size:48px; margin-bottom:12px;">🔍</div>
+  <div style="font-size:15px; font-weight:600;">Müşteri Ara</div>
+  <div style="font-size:13px; margin-top:6px;">İsim, şirket adı veya telefon numarası girin</div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const input = document.getElementById('aramaInput');
+  {% if not q %}
+  input.focus();
+  {% endif %}
+
+  // Enter tuşu ile otomatik arama
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      document.getElementById('aramaForm').submit();
+    }
+  });
+});
+</script>
+{% endblock %}

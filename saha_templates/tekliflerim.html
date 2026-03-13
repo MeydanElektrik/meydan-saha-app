@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Tekliflerim{% endblock %}
+{% block header_title %}Tekliflerim{% endblock %}
+{% block header_sub %}Gönderdiğim teklifler{% endblock %}
+
+{% block content %}
+{% if teklifler %}
+{% for t in teklifler %}
+<div class="list-item">
+  <span class="icon">📄</span>
+  <div class="info">
+    <div class="name">{{ t.konu or 'İsimsiz Teklif' }}</div>
+    <div class="meta">
+      {{ t.sirket_adi or t.musteri_ad or '-' }}
+      · {{ t.teklif_tarihi.strftime('%d.%m.%Y') if t.teklif_tarihi else '-' }}
+    </div>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+      <span style="font-weight:700; color:#1a6b3a;">
+        {% if t.genel_toplam %}{{ "%.2f"|format(t.genel_toplam) }} ₺{% endif %}
+      </span>
+      <span class="badge badge-{{ t.teklif_durumu }}">
+        {{ t.teklif_durumu | replace('_', ' ') | title }}
+      </span>
+    </div>
+    <div style="font-size:11px; color:#aaa; margin-top:2px;">{{ t.teklif_no }}</div>
+  </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="card" style="text-align:center; padding:40px 20px; color:#aaa;">
+  <div style="font-size:48px; margin-bottom:12px;">📄</div>
+  <div style="font-size:16px; font-weight:600; margin-bottom:6px;">Henüz teklif yok</div>
+  <a href="{{ url_for('yeni_teklif') }}" class="btn-primary" style="display:inline-block; margin-top:16px; padding:13px 30px;">
+    📄 Yeni Teklif Oluştur
+  </a>
+</div>
+{% endif %}
+{% endblock %}
