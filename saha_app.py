@@ -15,7 +15,13 @@ from urllib.parse import urlparse
 
 app = Flask(__name__, template_folder='saha_templates')
 app.secret_key = os.getenv('SECRET_KEY', 'saha_meydan_2025_secret')
-app.config['SESSION_PERMANENT'] = False  # Tarayıcı kapanınca oturum sona ersin
+app.config['SESSION_PERMANENT'] = False
+
+@app.before_request
+def before_first():
+    if not getattr(app, '_migrated', False):
+        run_migrations()
+        app._migrated = True  # Tarayıcı kapanınca oturum sona ersin
 
 # ========== DB ==========
 def get_db():
@@ -33,6 +39,29 @@ def get_db():
         cursorclass=pymysql.cursors.DictCursor,
         autocommit=True
     )
+
+# ========== DB MİGRASYON ==========
+def run_migrations():
+    """Saha app için gerekli DB değişikliklerini otomatik uygula"""
+    try:
+        db = get_db()
+        cursor = db.cursor()
+        # malzeme_id NULL olabilsin (manuel malzeme için)
+        try:
+            cursor.execute("ALTER TABLE servis_malzemeleri MODIFY COLUMN malzeme_id INT NULL")
+        except: pass
+        # malzeme_adi kolonu ekle (manuel malzeme adı)
+        try:
+            cursor.execute("ALTER TABLE servis_malzemeleri ADD COLUMN malzeme_adi VARCHAR(255) NULL AFTER malzeme_id")
+        except: pass
+        # birim kolonu ekle
+        try:
+            cursor.execute("ALTER TABLE servis_malzemeleri ADD COLUMN birim VARCHAR(50) DEFAULT 'adet' AFTER malzeme_adi")
+        except: pass
+        db.close()
+        print("✅ DB migrasyon tamamlandı")
+    except Exception as e:
+        print(f"⚠️ Migrasyon uyarısı: {e}")
 
 # ========== AUTH ==========
 def login_required(f):
@@ -215,12 +244,11 @@ def yeni_servis():
 
             for (ad, miktar, birim, bf, top) in malzemeler_veri:
                 try:
-                    # toplam_fiyat generated column olduğu için INSERT'e dahil etme
                     cursor.execute("""
                         INSERT INTO servis_malzemeleri
-                        (servis_id, malzeme_id, miktar, birim, birim_fiyat)
-                        VALUES (%s, NULL, %s, %s, %s)
-                    """, (servis_id, miktar, birim, bf))
+                        (servis_id, malzeme_id, malzeme_adi, miktar, birim, birim_fiyat)
+                        VALUES (%s, NULL, %s, %s, %s, %s)
+                    """, (servis_id, ad, miktar, birim, bf))
                 except Exception as me:
                     print(f"Malzeme eklenemedi: {me}")
 
@@ -426,5 +454,6 @@ def musteri_ara():
     return render_template('musteri_ara.html', musteriler=musteriler, q=q)
 
 if __name__ == '__main__':
+    run_migrations()
     port = int(os.getenv('PORT', 5001))
     app.run(debug=not os.getenv('RAILWAY_ENVIRONMENT'), host='0.0.0.0', port=port)
