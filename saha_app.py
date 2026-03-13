@@ -170,7 +170,11 @@ def yeni_servis():
             db = get_db()
             cursor = db.cursor()
 
-            musteri_id = request.form.get('musteri_id')
+            musteri_id = request.form.get('musteri_id', '').strip()
+            if not musteri_id:
+                flash('❌ Lütfen müşteri seçin veya yeni müşteri ekleyin!', 'error')
+                return redirect(url_for('yeni_servis'))
+            musteri_id = int(musteri_id)
             tarih = request.form.get('servis_tarihi')
             saat = request.form.get('servis_saati', '09:00')
             aciklama = request.form.get('is_aciklamasi', '').strip()
