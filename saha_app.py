@@ -136,6 +136,32 @@ def anasayfa():
         taslak_teklif=taslak_teklif
     )
 
+@app.route('/musteri_ekle_hizli', methods=['POST'])
+@login_required
+def musteri_ekle_hizli():
+    """Servis formundan hızlı müşteri ekleme"""
+    try:
+        ad = request.form.get('yeni_ad', '').strip()
+        telefon = request.form.get('yeni_telefon', '').strip()
+        sirket = request.form.get('yeni_sirket', '').strip()
+        if not ad:
+            return jsonify({'success': False, 'message': 'Ad zorunlu!'})
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute("""
+            INSERT INTO musteriler (ad, soyad, sirket_adi, telefon, musteri_tipi, aktif, kayit_tarihi)
+            VALUES (%s, '', %s, %s, 'bireysel', 1, NOW())
+        """, (ad, sirket or None, telefon or None))
+        musteri_id = cursor.lastrowid
+        db.close()
+        label = sirket or ad
+        if telefon:
+            label += f' · {telefon}'
+        return jsonify({'success': True, 'id': musteri_id, 'label': label})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+
 @app.route('/yeni_servis', methods=['GET', 'POST'])
 @login_required
 def yeni_servis():
@@ -148,37 +174,50 @@ def yeni_servis():
             tarih = request.form.get('servis_tarihi')
             saat = request.form.get('servis_saati', '09:00')
             aciklama = request.form.get('is_aciklamasi', '').strip()
-            etiketler = request.form.get('etiketler', '')
+            iscilik = float(request.form.get('iscilik_ucreti', 0) or 0)
 
-            cursor.execute("""
-                INSERT INTO servis_kayitlari
-                (musteri_id, personel_id, servis_tarihi, servis_saati,
-                 is_aciklamasi, yapilacak_calisma, servis_durumu, kaynak, kayit_tarihi)
-                VALUES (%s, %s, %s, %s, %s, %s, 'beklemede', 'saha', NOW())
-            """, (musteri_id, session['personel_id'], tarih, saat, aciklama, aciklama))
-
-            servis_id = cursor.lastrowid
-
-            # Malzemeleri ekle
+            # Malzemeleri topla
             malzeme_adlari = request.form.getlist('malzeme_ad[]')
             miktarlar = request.form.getlist('malzeme_miktar[]')
             birimler = request.form.getlist('malzeme_birim[]')
+            birim_fiyatlar = request.form.getlist('malzeme_birim_fiyat[]')
 
+            malzeme_toplam = 0
+            malzemeler_veri = []
             for i, ad in enumerate(malzeme_adlari):
                 ad = ad.strip()
                 if not ad:
                     continue
                 miktar = float(miktarlar[i]) if i < len(miktarlar) else 1
                 birim = birimler[i] if i < len(birimler) else 'adet'
+                bf = float(birim_fiyatlar[i]) if i < len(birim_fiyatlar) else 0
+                toplam = round(miktar * bf, 2)
+                malzeme_toplam += toplam
+                malzemeler_veri.append((ad, miktar, birim, bf, toplam))
 
-                # Manuel malzeme adıyla ekle (malzeme_id yok, aciklama olarak)
-                cursor.execute("""
-                    INSERT INTO servis_malzemeleri
-                    (servis_id, malzeme_id, miktar, birim, birim_fiyat, toplam_fiyat)
-                    VALUES (%s, NULL, %s, %s, 0, 0)
-                """, (servis_id, miktar, birim))
-                # Not: malzeme adını is_aciklamasi güncelleyerek kaydedebiliriz
-                # Ya da ayrı bir not alanı kullanabiliriz - şimdilik DB'ye miktar/birim kaydediyoruz
+            toplam_tutar = round(malzeme_toplam + iscilik, 2)
+
+            cursor.execute("""
+                INSERT INTO servis_kayitlari
+                (musteri_id, personel_id, servis_tarihi, servis_saati,
+                 is_aciklamasi, yapilacak_calisma, iscilik_ucreti, toplam_tutar,
+                 servis_durumu, kaynak, kayit_tarihi)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'beklemede', 'saha', NOW())
+            """, (musteri_id, session['personel_id'], tarih, saat,
+                  aciklama, aciklama, iscilik, toplam_tutar))
+
+            servis_id = cursor.lastrowid
+
+            for (ad, miktar, birim, bf, top) in malzemeler_veri:
+                try:
+                    # toplam_fiyat generated column olduğu için INSERT'e dahil etme
+                    cursor.execute("""
+                        INSERT INTO servis_malzemeleri
+                        (servis_id, malzeme_id, miktar, birim, birim_fiyat)
+                        VALUES (%s, NULL, %s, %s, %s)
+                    """, (servis_id, miktar, birim, bf))
+                except Exception as me:
+                    print(f"Malzeme eklenemedi: {me}")
 
             db.close()
             flash('✅ Servis başarıyla kaydedildi!', 'success')
@@ -259,6 +298,7 @@ def yeni_teklif():
             tarih = request.form.get('teklif_tarihi')
             kdv = int(request.form.get('kdv_orani', 18))
             notlar = request.form.get('notlar', '')
+            iscilik = float(request.form.get('iscilik_ucreti', 0) or 0)
 
             # Teklif no oluştur
             yil = datetime.now().year
@@ -288,6 +328,11 @@ def yeni_teklif():
                 tp = round(miktar * fiyat, 2)
                 toplam += tp
                 kalemler.append({'aciklama': ac, 'miktar': miktar, 'birim': birim, 'fiyat': fiyat, 'toplam_fiyat': tp})
+
+            # İşçilik kalemi olarak ekle
+            if iscilik > 0:
+                kalemler.append({'aciklama': 'İşçilik', 'miktar': 1, 'birim': 'iş', 'fiyat': iscilik, 'toplam_fiyat': iscilik})
+                toplam += iscilik
 
             kdv_tutari = round(toplam * kdv / 100, 2)
             genel_toplam = round(toplam + kdv_tutari, 2)
