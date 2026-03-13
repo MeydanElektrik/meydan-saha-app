@@ -3,6 +3,29 @@
 {% block header_title %}Yeni Servis{% endblock %}
 {% block header_sub %}Saha kaydı oluştur{% endblock %}
 
+{% block extra_css %}
+<style>
+.etiket-btn {
+  padding: 7px 14px; border-radius: 20px; font-size: 13px; font-weight: 600;
+  background: #f0f0f0; color: #555; border: 1.5px solid #ddd; cursor: pointer;
+  transition: all 0.15s; display: inline-block;
+}
+.etiket-btn.aktif {
+  background: #1a6b3a; color: white; border-color: #1a6b3a;
+}
+.etiket-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #e8f5e9; color: #1a6b3a; border: 1px solid #a5d6a7;
+  padding: 4px 10px 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 600;
+  margin: 3px;
+}
+.etiket-badge button {
+  background: none; border: none; color: #1a6b3a; cursor: pointer;
+  font-size: 16px; line-height: 1; padding: 0; font-weight: 700;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <form method="POST" id="servisForm">
 
@@ -22,7 +45,6 @@
       </button>
     </div>
 
-    <!-- Mevcut müşteri -->
     <div id="mevcut_blok">
       <div class="field" style="margin:0;">
         <label>Müşteri *</label>
@@ -44,7 +66,6 @@
       {% endif %}
     </div>
 
-    <!-- Yeni müşteri -->
     <div id="yeni_blok" style="display:none;">
       <div class="field">
         <label>Adı Soyadı *</label>
@@ -85,11 +106,31 @@
     </div>
   </div>
 
-  <!-- İş Açıklaması -->
+  <!-- İş Açıklaması + Etiketler -->
   <div class="card">
-    <div class="card-title">📝 İş Açıklaması</div>
+    <div class="card-title">🏷️ İş Türü & Açıklama</div>
+
+    <!-- Hızlı etiket butonları -->
+    <div style="margin-bottom:10px;">
+      <div style="font-size:12px; color:#888; font-weight:600; margin-bottom:8px;">Hızlı Etiket Seç:</div>
+      <div style="display:flex; flex-wrap:wrap; gap:6px;">
+        {% for et in ['Montaj','Tamir','Kurulum','Bakım','Onarım','Değişim','Test','İnceleme','Yenileme','Temizlik','Arıza','Güncelleme'] %}
+        <button type="button" class="etiket-btn" data-etiket="{{ et }}" onclick="toggleEtiket('{{ et }}', this)">
+          {{ et }}
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Seçilen etiketler -->
+    <div id="etiketListesi" style="min-height:28px; margin-bottom:8px;"></div>
+    <input type="hidden" name="etiketler" id="etiketlerInput">
+
+    <!-- Açıklama -->
     <div class="field" style="margin:0;">
-      <textarea name="is_aciklamasi" placeholder="Yapılacak işi kısaca açıklayın..." required></textarea>
+      <label>Açıklama *</label>
+      <textarea name="is_aciklamasi" id="aciklamaInput"
+                placeholder="Etiket seçin veya manuel yazın..." required rows="3"></textarea>
     </div>
   </div>
 
@@ -118,7 +159,7 @@
         <span>İşçilik</span><span id="iscilikGoster">0,00 ₺</span>
       </div>
       <div style="height:1px; background:#e0e0e0; margin:8px 0;"></div>
-      <div style="display:flex; justify-content:space-between; font-size:17px; font-weight:800; color:#1a6b3a; padding:4px 0;">
+      <div style="display:flex; justify-content:space-between; font-size:17px; font-weight:800; color:#1a6b3a;">
         <span>Toplam</span><span id="servisToplamGoster">0,00 ₺</span>
       </div>
     </div>
@@ -132,25 +173,27 @@
 {% block extra_js %}
 <script>
 let aktifMod = 'mevcut';
+let seciliEtiketler = [];
 const BIRIMLER = ['Adet','Metre','m²','Kg','Litre','Takım','Paket','Rulo','Kutu'];
 
+// ===== MÜŞTERİ =====
 function switchMusteri(mod) {
   aktifMod = mod;
   document.getElementById('mevcut_blok').style.display = mod==='mevcut' ? 'block' : 'none';
   document.getElementById('yeni_blok').style.display = mod==='yeni' ? 'block' : 'none';
-  document.getElementById('btnMevcut').style.cssText = `padding:10px;border-radius:10px;font-size:14px;font-weight:600;background:${mod==='mevcut'?'#1a6b3a':'#e8e8e8'};color:${mod==='mevcut'?'white':'#555'};border:none;cursor:pointer;`;
-  document.getElementById('btnYeni').style.cssText = `padding:10px;border-radius:10px;font-size:14px;font-weight:600;background:${mod==='yeni'?'#1a6b3a':'#e8e8e8'};color:${mod==='yeni'?'white':'#555'};border:none;cursor:pointer;`;
+  const bm = document.getElementById('btnMevcut');
+  const by = document.getElementById('btnYeni');
+  bm.style.cssText = `padding:10px;border-radius:10px;font-size:14px;font-weight:600;background:${mod==='mevcut'?'#1a6b3a':'#e8e8e8'};color:${mod==='mevcut'?'white':'#555'};border:none;cursor:pointer;`;
+  by.style.cssText = `padding:10px;border-radius:10px;font-size:14px;font-weight:600;background:${mod==='yeni'?'#1a6b3a':'#e8e8e8'};color:${mod==='yeni'?'white':'#555'};border:none;cursor:pointer;`;
   document.getElementById('musteriSelect').required = (mod === 'mevcut');
 }
 
 function musteriKaydet() {
   const ad = document.getElementById('yeni_ad').value.trim();
   if (!ad) { alert('Ad zorunlu!'); return; }
-
   const btn = document.getElementById('musteriKaydetBtn');
   btn.textContent = '⏳ Kaydediliyor...';
   btn.disabled = true;
-
   fetch('/musteri_ekle_hizli', {
     method: 'POST',
     body: new URLSearchParams({
@@ -158,33 +201,72 @@ function musteriKaydet() {
       yeni_telefon: document.getElementById('yeni_telefon').value.trim(),
       yeni_sirket: document.getElementById('yeni_sirket').value.trim()
     })
-  })
-  .then(r => r.json())
-  .then(d => {
+  }).then(r=>r.json()).then(d=>{
     if (d.success) {
-      // Sayfayı yenile, seçili müşteriyle geri dön
       document.getElementById('musteriSonuc').innerHTML =
         `<span style="color:#1a6b3a;font-weight:700;">✅ Kaydedildi, yükleniyor...</span>`;
-      setTimeout(() => {
-        window.location.href = d.redirect;
-      }, 600);
+      setTimeout(() => { window.location.href = d.redirect; }, 600);
     } else {
       document.getElementById('musteriSonuc').innerHTML =
         `<span style="color:#dc3545;">❌ ${d.message}</span>`;
       btn.textContent = '💾 Müşteriyi Kaydet ve Seç';
       btn.disabled = false;
     }
-  })
-  .catch(() => {
-    document.getElementById('musteriSonuc').innerHTML =
-      `<span style="color:#dc3545;">❌ Bağlantı hatası</span>`;
-    btn.textContent = '💾 Müşteriyi Kaydet ve Seç';
-    btn.disabled = false;
   });
 }
 
-const BIRIMLER_HTML = BIRIMLER.map(b=>`<option>${b}</option>`).join('');
+// ===== ETİKETLER =====
+function toggleEtiket(etiket, btn) {
+  const idx = seciliEtiketler.indexOf(etiket);
+  if (idx === -1) {
+    seciliEtiketler.push(etiket);
+    btn.classList.add('aktif');
+  } else {
+    seciliEtiketler.splice(idx, 1);
+    btn.classList.remove('aktif');
+  }
+  renderEtiketler();
+  updateAciklama();
+}
 
+function etiketKaldir(etiket) {
+  seciliEtiketler = seciliEtiketler.filter(e => e !== etiket);
+  // Butonu da güncelle
+  document.querySelectorAll('.etiket-btn').forEach(btn => {
+    if (btn.dataset.etiket === etiket) btn.classList.remove('aktif');
+  });
+  renderEtiketler();
+  updateAciklama();
+}
+
+function renderEtiketler() {
+  const liste = document.getElementById('etiketListesi');
+  if (seciliEtiketler.length === 0) {
+    liste.innerHTML = '';
+    return;
+  }
+  liste.innerHTML = seciliEtiketler.map(e =>
+    `<span class="etiket-badge">${e}
+      <button type="button" onclick="etiketKaldir('${e}')">×</button>
+    </span>`
+  ).join('');
+  document.getElementById('etiketlerInput').value = seciliEtiketler.join(',');
+}
+
+function updateAciklama() {
+  const textarea = document.getElementById('aciklamaInput');
+  // Mevcut metni al, etiket prefix'ini çıkar
+  let mevcut = textarea.value;
+  // Başındaki [Etiket] kısmını temizle
+  mevcut = mevcut.replace(/^\[[\w,\s]+\]\s*/, '');
+  if (seciliEtiketler.length > 0) {
+    textarea.value = '[' + seciliEtiketler.join(', ') + '] ' + mevcut;
+  } else {
+    textarea.value = mevcut;
+  }
+}
+
+// ===== MALZEMELER =====
 function malzemeEkle() {
   const container = document.getElementById('malzemeContainer');
   const div = document.createElement('div');
@@ -199,8 +281,7 @@ function malzemeEkle() {
     <div style="display:grid;grid-template-columns:1fr 1.4fr 1.6fr;gap:8px;">
       <div>
         <div style="font-size:11px;color:#888;margin-bottom:4px;font-weight:600;">Miktar</div>
-        <input type="number" name="malzeme_miktar[]" value="1" min="0" step="0.01"
-               inputmode="decimal"
+        <input type="number" name="malzeme_miktar[]" value="1" min="0" step="0.01" inputmode="decimal"
                style="width:100%;padding:10px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;text-align:center;"
                oninput="hesapla()">
       </div>
@@ -208,13 +289,12 @@ function malzemeEkle() {
         <div style="font-size:11px;color:#888;margin-bottom:4px;font-weight:600;">Birim</div>
         <select name="malzeme_birim[]"
                 style="width:100%;padding:10px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;-webkit-appearance:none;background:white;">
-          ${BIRIMLER_HTML}
+          ${BIRIMLER.map(b=>`<option>${b}</option>`).join('')}
         </select>
       </div>
       <div>
         <div style="font-size:11px;color:#888;margin-bottom:4px;font-weight:600;">Birim Fiyatı (₺)</div>
-        <input type="number" name="malzeme_birim_fiyat[]" placeholder="0,00" min="0" step="0.01"
-               inputmode="decimal"
+        <input type="number" name="malzeme_birim_fiyat[]" placeholder="0,00" min="0" step="0.01" inputmode="decimal"
                style="width:100%;padding:10px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;text-align:right;"
                oninput="hesapla()">
       </div>
@@ -242,20 +322,11 @@ function hesapla() {
 }
 
 document.getElementById('servisForm').addEventListener('submit', function(e) {
-  const select = document.getElementById('musteriSelect');
-  if (aktifMod === 'mevcut' && !select.value) {
-    e.preventDefault();
-    alert('Lütfen müşteri seçin!');
+  if (aktifMod === 'mevcut' && !document.getElementById('musteriSelect').value) {
+    e.preventDefault(); alert('Lütfen müşteri seçin!');
   }
 });
 
-document.addEventListener('DOMContentLoaded', function() {
-  malzemeEkle();
-  // Eğer URL'de musteri_id varsa zaten mevcut modda ve seçili — bildirim göster
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('musteri_id')) {
-    // Zaten seçili, kullanıcıya bildir
-  }
-});
+document.addEventListener('DOMContentLoaded', malzemeEkle);
 </script>
 {% endblock %}
