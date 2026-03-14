@@ -106,31 +106,27 @@
     </div>
   </div>
 
-  <!-- İş Açıklaması + Etiketler -->
+  <!-- İş Türü (sadece etiketler) -->
   <div class="card">
-    <div class="card-title">🏷️ İş Türü & Açıklama</div>
-
-    <!-- Hızlı etiket butonları -->
-    <div style="margin-bottom:10px;">
-      <div style="font-size:12px; color:#888; font-weight:600; margin-bottom:8px;">Hızlı Etiket Seç:</div>
-      <div style="display:flex; flex-wrap:wrap; gap:6px;">
-        {% for et in ['Montaj','Tamir','Kurulum','Bakım','Onarım','Değişim','Test','İnceleme','Yenileme','Temizlik','Arıza','Güncelleme'] %}
-        <button type="button" class="etiket-btn" data-etiket="{{ et }}" onclick="toggleEtiket('{{ et }}', this)">
-          {{ et }}
-        </button>
-        {% endfor %}
-      </div>
+    <div class="card-title">🏷️ İş Türü</div>
+    <div style="font-size:12px; color:#888; font-weight:600; margin-bottom:8px;">Etiket seçin (birden fazla seçilebilir):</div>
+    <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px;">
+      {% for et in ['Montaj','Tamir','Kurulum','Bakım','Onarım','Değişim','Test','İnceleme','Yenileme','Temizlik','Arıza','Güncelleme'] %}
+      <button type="button" class="etiket-btn" data-etiket="{{ et }}" onclick="toggleEtiket('{{ et }}', this)">
+        {{ et }}
+      </button>
+      {% endfor %}
     </div>
-
-    <!-- Seçilen etiketler -->
-    <div id="etiketListesi" style="min-height:28px; margin-bottom:8px;"></div>
+    <div id="etiketListesi" style="min-height:20px;"></div>
     <input type="hidden" name="etiketler" id="etiketlerInput">
+  </div>
 
-    <!-- Açıklama -->
+  <!-- Yapılan Çalışma (sadece text) -->
+  <div class="card">
+    <div class="card-title">📝 Yapılan Çalışma</div>
     <div class="field" style="margin:0;">
-      <label>Açıklama *</label>
-      <textarea name="is_aciklamasi" id="aciklamaInput"
-                placeholder="Etiket seçin veya manuel yazın..." required rows="3"></textarea>
+      <textarea name="yapilan_calisma" id="yapCalismaInput"
+                placeholder="Yapılan işi kısaca açıklayın..." rows="3" required></textarea>
     </div>
   </div>
 
@@ -218,52 +214,27 @@ function musteriKaydet() {
 // ===== ETİKETLER =====
 function toggleEtiket(etiket, btn) {
   const idx = seciliEtiketler.indexOf(etiket);
-  if (idx === -1) {
-    seciliEtiketler.push(etiket);
-    btn.classList.add('aktif');
-  } else {
-    seciliEtiketler.splice(idx, 1);
-    btn.classList.remove('aktif');
-  }
+  if (idx === -1) { seciliEtiketler.push(etiket); btn.classList.add('aktif'); }
+  else { seciliEtiketler.splice(idx, 1); btn.classList.remove('aktif'); }
   renderEtiketler();
-  updateAciklama();
 }
 
 function etiketKaldir(etiket) {
   seciliEtiketler = seciliEtiketler.filter(e => e !== etiket);
-  // Butonu da güncelle
-  document.querySelectorAll('.etiket-btn').forEach(btn => {
-    if (btn.dataset.etiket === etiket) btn.classList.remove('aktif');
+  document.querySelectorAll('.etiket-btn').forEach(b => {
+    if (b.dataset.etiket === etiket) b.classList.remove('aktif');
   });
   renderEtiketler();
-  updateAciklama();
 }
 
 function renderEtiketler() {
   const liste = document.getElementById('etiketListesi');
-  if (seciliEtiketler.length === 0) {
-    liste.innerHTML = '';
-    return;
-  }
   liste.innerHTML = seciliEtiketler.map(e =>
     `<span class="etiket-badge">${e}
       <button type="button" onclick="etiketKaldir('${e}')">×</button>
     </span>`
   ).join('');
   document.getElementById('etiketlerInput').value = seciliEtiketler.join(',');
-}
-
-function updateAciklama() {
-  const textarea = document.getElementById('aciklamaInput');
-  // Mevcut metni al, etiket prefix'ini çıkar
-  let mevcut = textarea.value;
-  // Başındaki [Etiket] kısmını temizle
-  mevcut = mevcut.replace(/^\[[\w,\s]+\]\s*/, '');
-  if (seciliEtiketler.length > 0) {
-    textarea.value = '[' + seciliEtiketler.join(', ') + '] ' + mevcut;
-  } else {
-    textarea.value = mevcut;
-  }
 }
 
 // ===== MALZEMELER =====
