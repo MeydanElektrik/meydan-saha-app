@@ -46,26 +46,56 @@ def run_migrations():
     try:
         db = get_db()
         cursor = db.cursor()
-        # malzeme_id NULL olabilsin (manuel malzeme için)
-        try:
-            cursor.execute("ALTER TABLE servis_malzemeleri MODIFY COLUMN malzeme_id INT NULL")
-        except: pass
-        # malzeme_adi kolonu ekle (manuel malzeme adı)
-        try:
-            cursor.execute("ALTER TABLE servis_malzemeleri ADD COLUMN malzeme_adi VARCHAR(255) NULL AFTER malzeme_id")
-        except: pass
-        # birim kolonu ekle
-        try:
-            cursor.execute("ALTER TABLE servis_malzemeleri ADD COLUMN birim VARCHAR(50) DEFAULT 'adet' AFTER malzeme_adi")
-        except: pass
-        # is_turu kolonu (etiketler ayrı kolon - veri analizi için)
-        try:
-            cursor.execute("ALTER TABLE servis_kayitlari ADD COLUMN is_turu VARCHAR(500) NULL AFTER is_aciklamasi")
-        except: pass
+
+        # Mevcut kolon listelerini kontrol et
+        cursor.execute("SHOW COLUMNS FROM servis_malzemeleri")
+        sm_cols = {row['Field'] for row in cursor.fetchall()}
+
+        cursor.execute("SHOW COLUMNS FROM servis_kayitlari")
+        sk_cols = {row['Field'] for row in cursor.fetchall()}
+
+        # malzeme_id: NOT NULL kısıtını kaldır
+        if 'malzeme_id' in sm_cols:
+            try:
+                cursor.execute("ALTER TABLE servis_malzemeleri MODIFY COLUMN malzeme_id INT NULL")
+                print("✅ malzeme_id NULL yapıldı")
+            except Exception as e:
+                print(f"⚠️ malzeme_id modify: {e}")
+
+        # malzeme_adi: yoksa ekle
+        if 'malzeme_adi' not in sm_cols:
+            try:
+                cursor.execute("ALTER TABLE servis_malzemeleri ADD COLUMN malzeme_adi VARCHAR(255) NULL")
+                print("✅ malzeme_adi kolonu eklendi")
+            except Exception as e:
+                print(f"⚠️ malzeme_adi ekle: {e}")
+
+        # birim: yoksa ekle
+        if 'birim' not in sm_cols:
+            try:
+                cursor.execute("ALTER TABLE servis_malzemeleri ADD COLUMN birim VARCHAR(50) DEFAULT 'adet'")
+                print("✅ birim kolonu eklendi")
+            except Exception as e:
+                print(f"⚠️ birim ekle: {e}")
+
+        # is_turu: servis_kayitlari'nda yoksa ekle
+        if 'is_turu' not in sk_cols:
+            try:
+                cursor.execute("ALTER TABLE servis_kayitlari ADD COLUMN is_turu VARCHAR(500) NULL")
+                print("✅ is_turu kolonu eklendi")
+            except Exception as e:
+                print(f"⚠️ is_turu ekle: {e}")
+        else:
+            print("ℹ️ is_turu zaten mevcut")
+
+        # Migration sonrası kolon durumunu doğrula
+        cursor.execute("SHOW COLUMNS FROM servis_malzemeleri")
+        final_cols = {row['Field'] for row in cursor.fetchall()}
+        print(f"✅ DB migrasyon tamamlandı | servis_malzemeleri kolonlar: {final_cols}")
+
         db.close()
-        print("✅ DB migrasyon tamamlandı")
     except Exception as e:
-        print(f"⚠️ Migrasyon uyarısı: {e}")
+        print(f"❌ Migrasyon HATA: {e}")
 
 # ========== AUTH ==========
 def login_required(f):
@@ -212,11 +242,14 @@ def yeni_servis():
             tarih = request.form.get('servis_tarihi')
             saat = request.form.get('servis_saati', '09:00')
             etiketler = request.form.get('etiketler', '').strip()
-            aciklama_ham = request.form.get('is_aciklamasi', '').strip()
-            # [Etiket, ...] prefix'ini temizle, saf açıklamayı al
-            aciklama_temiz = aciklama_ham.split('] ', 1)[-1].strip() if aciklama_ham.startswith('[') else aciklama_ham.strip()
-            # is_aciklamasi = "[Montaj, Tamir] açıklama" formatında kaydet (ana sistem badge görüntülemesi için)
-            aciklama = ('[' + etiketler + '] ' + aciklama_temiz).strip() if etiketler else aciklama_temiz
+            yapilan_calisma = request.form.get('yapilan_calisma', '').strip()
+            # is_aciklamasi = "[Montaj, Tamir] yapılan çalışma" formatı - ana sistem badge görüntülemesi için
+            if etiketler and yapilan_calisma:
+                is_aciklamasi = '[' + etiketler + '] ' + yapilan_calisma
+            elif etiketler:
+                is_aciklamasi = '[' + etiketler + ']'
+            else:
+                is_aciklamasi = yapilan_calisma
             iscilik = float(request.form.get('iscilik_ucreti', 0) or 0)
 
             # Malzemeleri topla
@@ -248,20 +281,52 @@ def yeni_servis():
                  servis_durumu, kaynak, kayit_tarihi)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'beklemede', 'saha', NOW())
             """, (musteri_id, session['personel_id'], tarih, saat,
-                  aciklama, aciklama_temiz, etiketler or None,
+                  is_aciklamasi, yapilan_calisma, etiketler or None,
                   iscilik, toplam_tutar))
 
             servis_id = cursor.lastrowid
 
-            for (ad, miktar, birim, bf, top) in malzemeler_veri:
+            # Mevcut kolon durumunu kontrol et
+            cursor.execute("SHOW COLUMNS FROM servis_malzemeleri")
+            mevcut_kolonlar = {row['Field'] for row in cursor.fetchall()}
+            has_malzeme_adi = 'malzeme_adi' in mevcut_kolonlar
+            has_birim = 'birim' in mevcut_kolonlar
+
+            malzeme_eklendi = 0
+            for (ad, miktar, birim_val, bf, top) in malzemeler_veri:
                 try:
-                    cursor.execute("""
-                        INSERT INTO servis_malzemeleri
-                        (servis_id, malzeme_id, malzeme_adi, miktar, birim, birim_fiyat)
-                        VALUES (%s, NULL, %s, %s, %s, %s)
-                    """, (servis_id, ad, miktar, birim, bf))
+                    if has_malzeme_adi and has_birim:
+                        # Tam INSERT - tüm kolonlar mevcut
+                        cursor.execute("""
+                            INSERT INTO servis_malzemeleri
+                            (servis_id, malzeme_id, malzeme_adi, miktar, birim, birim_fiyat)
+                            VALUES (%s, NULL, %s, %s, %s, %s)
+                        """, (servis_id, ad, miktar, birim_val, bf))
+                    elif has_malzeme_adi:
+                        cursor.execute("""
+                            INSERT INTO servis_malzemeleri
+                            (servis_id, malzeme_id, malzeme_adi, miktar, birim_fiyat)
+                            VALUES (%s, NULL, %s, %s, %s)
+                        """, (servis_id, ad, miktar, bf))
+                    else:
+                        # Fallback: malzeme_id NULL veremiyorsak geç, text'e yaz
+                        print(f"⚠️ malzeme_adi kolonu yok, atlandı: {ad}")
+                        continue
+                    malzeme_eklendi += 1
                 except Exception as me:
-                    print(f"Malzeme eklenemedi: {me}")
+                    print(f"❌ Malzeme INSERT HATA [{ad}]: {type(me).__name__}: {me}")
+
+            # Malzeme adlarını text alanına da yaz (yedek / okunabilirlik)
+            if malzemeler_veri:
+                malzeme_text = ', '.join(
+                    f"{ad} x{miktar} {birim_val}" + (f" ({bf}₺)" if bf else '')
+                    for ad, miktar, birim_val, bf, _ in malzemeler_veri
+                )
+                cursor.execute(
+                    "UPDATE servis_kayitlari SET kullanilan_malzemeler=%s WHERE id=%s",
+                    (malzeme_text, servis_id)
+                )
+                print(f"✅ {malzeme_eklendi}/{len(malzemeler_veri)} malzeme eklendi, servis_id={servis_id}")
 
             db.close()
             flash('✅ Servis başarıyla kaydedildi!', 'success')
