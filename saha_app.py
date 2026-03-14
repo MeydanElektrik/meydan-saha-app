@@ -58,6 +58,10 @@ def run_migrations():
         try:
             cursor.execute("ALTER TABLE servis_malzemeleri ADD COLUMN birim VARCHAR(50) DEFAULT 'adet' AFTER malzeme_adi")
         except: pass
+        # is_turu kolonu (etiketler ayrı kolon - veri analizi için)
+        try:
+            cursor.execute("ALTER TABLE servis_kayitlari ADD COLUMN is_turu VARCHAR(500) NULL AFTER is_aciklamasi")
+        except: pass
         db.close()
         print("✅ DB migrasyon tamamlandı")
     except Exception as e:
@@ -207,7 +211,12 @@ def yeni_servis():
             musteri_id = int(musteri_id)
             tarih = request.form.get('servis_tarihi')
             saat = request.form.get('servis_saati', '09:00')
-            aciklama = request.form.get('is_aciklamasi', '').strip()
+            etiketler = request.form.get('etiketler', '').strip()
+            aciklama_ham = request.form.get('is_aciklamasi', '').strip()
+            # [Etiket, ...] prefix'ini temizle, saf açıklamayı al
+            aciklama_temiz = aciklama_ham.split('] ', 1)[-1].strip() if aciklama_ham.startswith('[') else aciklama_ham.strip()
+            # is_aciklamasi = "[Montaj, Tamir] açıklama" formatında kaydet (ana sistem badge görüntülemesi için)
+            aciklama = ('[' + etiketler + '] ' + aciklama_temiz).strip() if etiketler else aciklama_temiz
             iscilik = float(request.form.get('iscilik_ucreti', 0) or 0)
 
             # Malzemeleri topla
@@ -234,11 +243,13 @@ def yeni_servis():
             cursor.execute("""
                 INSERT INTO servis_kayitlari
                 (musteri_id, personel_id, servis_tarihi, servis_saati,
-                 is_aciklamasi, yapilacak_calisma, iscilik_ucreti, toplam_tutar,
+                 is_aciklamasi, yapilacak_calisma, is_turu,
+                 iscilik_ucreti, toplam_tutar,
                  servis_durumu, kaynak, kayit_tarihi)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'beklemede', 'saha', NOW())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'beklemede', 'saha', NOW())
             """, (musteri_id, session['personel_id'], tarih, saat,
-                  aciklama, aciklama, iscilik, toplam_tutar))
+                  aciklama, aciklama_temiz, etiketler or None,
+                  iscilik, toplam_tutar))
 
             servis_id = cursor.lastrowid
 
